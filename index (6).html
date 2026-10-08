@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <title>CPSカウンター</title>
+    <style>
+        body { font-family: sans-serif; text-align: center; background-color: #f0f2f5; padding: 20px; }
+        .wrapper { display: flex; flex-direction: row; gap: 20px; max-width: 700px; margin: 0 auto; text-align: left; }
+        .container { background: white; padding: 20px; border-radius: 8px; flex: 1; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        .history-container { background: white; padding: 20px; border-radius: 8px; width: 220px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        .stat-box { background: #f8f9fa; padding: 10px; margin-bottom: 10px; border-radius: 4px; border: 1px solid #ddd; }
+        .stat-label { font-size: 12px; color: #666; font-weight: bold; }
+        .stat-val { font-size: 20px; font-weight: bold; color: #111; }
+        .interval-box { background: #e6f7ff; border-color: #91d5ff; color: #0050b3; }
+        .click-btn {
+            background-color: #007bff;
+            color: white;
+            font-size: 24px;
+            font-weight: bold;
+            padding: 40px 10px;
+            width: 100%;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            margin-top: 10px;
+            display: block;
+        }
+        .click-btn:active { background-color: #0056b3; }
+        .control-panel { margin-top: 15px; display: flex; gap: 10px; }
+        .sub-btn { flex: 1; padding: 12px; font-size: 16px; font-weight: bold; border: none; border-radius: 4px; cursor: pointer; }
+        .btn-stop { background-color: #ffc107; color: black; }
+        .btn-reset { background-color: #dc3545; color: white; }
+        .result-box { margin-top: 15px; padding: 15px; background-color: #e2f0d9; border-radius: 4px; display: none; color: #2b542c; }
+        .best-combo { background-color: #fff7e6; padding: 8px; border-radius: 4px; font-weight: bold; color: #d46b08; text-align: center; margin-bottom: 10px; border: 1px solid #ffd591; }
+        .log-list { list-style: none; padding: 0; margin: 0; max-height: 250px; overflow-y: auto; font-size: 14px; }
+        .log-list li { padding: 4px 0; border-bottom: 1px dashed #eee; }
+    </style>
+</head>
+<body>
+
+<div class="wrapper">
+    <!-- メイン画面 -->
+    <div class="container">
+        <h2>CPSカウンター ⚡</h2>
+        
+        <div class="stat-box interval-box">
+            <div class="stat-label">⏱️ 0.1秒内カウント (猶予: <span id="grace">0.10</span>秒)</div>
+            <div id="interval-count" class="stat-val">0</div>
+        </div>
+        
+        <div class="stat-box">
+            <div class="stat-label">経過時間</div>
+            <div id="time-val" class="stat-val">0.0</div>
+        </div>
+
+        <div class="stat-box">
+            <div class="stat-label">全体のCPS</div>
+            <div id="cps-val" class="stat-val">0.00</div>
+        </div>
+
+        <div class="stat-box">
+            <div class="stat-label">トータルクリック数</div>
+            <div id="total-count" class="stat-val">0</div>
+        </div>
+
+        <!-- 100%クリックが通る、標準の標準的なボタン型 -->
+        <button id="click-area" class="click-btn" onclick="mainClick()">ココを連打！</button>
+
+        <div class="control-panel">
+            <button class="sub-btn btn-stop" onclick="stopGame()">終了</button>
+            <button class="sub-btn btn-reset" onclick="resetGame()">リセット</button>
+        </div>
+
+        <div id="result" class="result-box">
+            <h3>🎉 結果</h3>
+            <p>トータル: <span id="res-clicks">0</span> 回</p>
+            <p>総合CPS: <span id="res-cps">0.00</span></p>
+        </div>
+    </div>
+
+    <!-- 履歴画面 -->
+    <div class="history-container">
+        <h3>📊 ログ</h3>
+        <div class="best-combo">👑 最高: <span id="best-val">0</span> 連打</div>
+        <ul id="log-list" class="log-list"></ul>
+    </div>
+</div>
+
+<script>
+    var clicks = 0;
+    var intervalClicks = 0;
+    var maxCombo = 0;
+    var isPlaying = false;
+    var isFinished = false;
+    var startTime = 0;
+    var lastClickTime = 0;
+    var timerId = null;
+
+    function mainClick() {
+        if (isFinished) return;
+        
+        var now = Date.now();
+        lastClickTime = now;
+
+        if (!isPlaying) {
+            isPlaying = true;
+            startTime = now;
+            document.getElementById('result').style.display = 'none';
+
+            timerId = setInterval(function() {
+                var loopNow = Date.now();
+                var diff = (loopNow - startTime) / 1000;
+                document.getElementById('time-val').innerText = diff.toFixed(1);
+
+                if (diff > 0) {
+                    document.getElementById('cps-val').innerText = (clicks / diff).toFixed(2);
+                }
+
+                var sinceLast = (loopNow - lastClickTime) / 1000;
+                if (sinceLast >= 0.1) {
+                    document.getElementById('grace').innerText = '0.00';
+                    
+                    if (intervalClicks >= 2) {
+                        if (intervalClicks > maxCombo) {
+                            maxCombo = intervalClicks;
+                            document.getElementById('best-val').innerText = maxCombo;
+                        }
+                        var li = document.createElement('li');
+                        li.innerText = '🔥 ' + intervalClicks + ' 連打！ (' + diff.toFixed(1) + '秒)';
+                        var logList = document.getElementById('log-list');
+                        logList.insertBefore(li, logList.firstChild);
+                    }
+                    
+                    intervalClicks = 0;
+                    document.getElementById('interval-count').innerText = '0';
+                } else {
+                    document.getElementById('grace').innerText = Math.max(0, 0.1 - sinceLast).toFixed(2);
+                }
+            }, 20);
+        }
+
+        clicks++;
+        intervalClicks++;
+        document.getElementById('total-count').innerText = clicks;
+        document.getElementById('interval-count').innerText = intervalClicks;
+    }
+
+    function stopGame() {
+        if (!isPlaying) return;
+        clearInterval(timerId);
+        isPlaying = false;
+        isFinished = true;
+
+        var finalTime = (Date.now() - startTime) / 1000;
+        var finalCps = finalTime > 0 ? (clicks / finalTime) : 0;
+
+        if (intervalClicks >= 2) {
+            if (intervalClicks > maxCombo) {
+                maxCombo = intervalClicks;
+                document.getElementById('best-val').innerText = maxCombo;
+            }
+            var li = document.createElement('li');
+            li.innerText = '🏁 ' + intervalClicks + ' 連打！ (終了)';
+            var logList = document.getElementById('log-list');
+            logList.insertBefore(li, logList.firstChild);
+        }
+
+        document.getElementById('res-clicks').innerText = clicks;
+        document.getElementById('res-cps').innerText = finalCps.toFixed(2);
+        document.getElementById('result').style.display = 'block';
+    }
+
+    function resetGame() {
+        clearInterval(timerId);
+        clicks = 0;
+        intervalClicks = 0;
+        maxCombo = 0;
+        isPlaying = false;
+        isFinished = false;
+        
+        document.getElementById('time-val').innerText = '0.0';
+        document.getElementById('cps-val').innerText = '0.00';
+        document.getElementById('total-count').innerText = '0';
+        document.getElementById('interval-count').innerText = '0';
+        document.getElementById('grace').innerText = '0.10';
+        document.getElementById('best-val').innerText = '0';
+        document.getElementById('result').style.display = 'none';
+        document.getElementById('log-list').innerHTML = '';
+    }
+
+    window.onkeydown = function(e) {
+        if (e.keyCode === 32) {
+            stopGame();
+        }
+    };
+</script>
+
+</body>
+</html>
